@@ -1,10 +1,11 @@
 #!/usr/bin/env python
+import copy
+import numpy as np
 import profile
+import pygame
 import random
 import threading
 import time
-import numpy as np
-import pygame
 pygame.init()
 
 
@@ -231,8 +232,9 @@ class Display(object):
 class Tetris(object):
 
     def __init__(self, display):
-        self.current = []
+        self.current_location = None
         self.current_type = None
+        self.current_orientation = 'N'
         self.placed = np.zeros((40, 10), dtype=int)
         self.display = display
         self.level = 1
@@ -241,17 +243,33 @@ class Tetris(object):
         self.saved = self.compute_grid()
         self.game_over = False
         self.ghost = []
+        self.ghost_location = None
         self.previous_ghost = []
         self.to_lock = False
         self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
-        # self.current_box = None
+
+    def location_to_sparse(self, location):
+        sparse = []
+        for y, row in enumerate(PIECES[self.current_type][self.current_orientation]):
+            for x, cell in enumerate(row):
+                if cell:
+                    sparse.append((y + location[0], x + location[1], cell))
+        return sparse
 
     def compute_grid(self):
         grid = self.placed.copy()
-        for y, x in self.current:
-            if grid[y, x] != 0:
-                raise Overlap
-            grid[y, x] = KEY[self.current_type]
+        if self.current_type is None:
+            return grid
+        for y, x, cell in self.location_to_sparse(self.current_location):
+            if cell:
+                if grid[y, x] != 0:
+                    raise Overlap
+                if y >= 20:
+                    raise Overlap
+                    print 'OVERLAP RAISED'
+                if not 0 <= x <= 9:
+                    raise Overlap
+                grid[y, x] = cell
         return grid
 
     def falling(self):
@@ -267,39 +285,34 @@ class Tetris(object):
             print 'time between falls: {}'.format(time.time() - start)
 
     def fall(self):
-        new = []
-        for y, x in self.current:
-            new.append((y + 1, x))
-        self.current = new
+        self.current_location[0] += 1
         self.update()
 
     def right(self):
-        new = []
-        current = self.current
-        for y, x in current:
-            new_x = x + 1
-            if new_x < 0 or new_x > 9:
+        current = copy.copy(self.current_location)
+        new = copy.copy(self.current_location)
+        new[1] += 1
+        for _, x, _ in self.location_to_sparse(new):
+            if not 0 <= x <= 9:
                 return
-            new.append((y, new_x))
-        self.current = new
+        self.current_location = new
         try:
             self.update()
         except Overlap:
-            self.current = current
+            self.current_location = current
 
     def left(self):
-        new = []
-        current = self.current
-        for y, x in current:
-            new_x = x - 1
-            if new_x < 0 or new_x > 9:
+        current = copy.copy(self.current_location)
+        new = copy.copy(self.current_location)
+        new[1] -= 1
+        for _, x, _ in self.location_to_sparse(new):
+            if not 0 <= x <= 9:
                 return
-            new.append((y, new_x))
-        self.current = new
+        self.current_location = new
         try:
             self.update()
         except Overlap:
-            self.current = current
+            self.current_location = current
 
     def rotate(self):
         pass
@@ -309,15 +322,8 @@ class Tetris(object):
         self.next_piece = next(self.gen)
         self.display.draw_next(PIECES[self.next_piece]['N'])
         self.current_type = piece
-        if self.current:
-            raise Exception("'current' attribute must be empty before spawning")
-        piece_arr = PIECES[piece]['N']
-        for y, row in enumerate(piece_arr):
-            for x, cell in enumerate(row):
-                if cell:
-                    self.current.append((y - 2, x + 5 - piece_arr.shape[1] // 2))
-        # self.current_box = (-2, 5 - piece_arr.shape[1] // 2)
-        # self.display.draw_cell(self.current_box[::-1], True, TEXT_COLOR)
+        self.current_location = [0, 0]
+        self.current_orientation = 'N'
         self.update()
         threading.Thread(target=self.falling).start()
 
@@ -341,7 +347,7 @@ class Tetris(object):
                 self.display.draw_cell((x, y), False, COLOR[KEY[self.current_type]])
                 self.previous_ghost.append((y, x))
         self.display.update()
-        if self.current == self.ghost:
+        if self.current_location == self.ghost_location:
             threading.Thread(target=self.lock).start()
         else:
             self.to_lock = False
@@ -361,20 +367,21 @@ class Tetris(object):
                     self.update()
 
     def calculate_ghost(self):
-        current = self.current
+        current = copy.copy(self.current_location)
         new = current
         collision = False
         while not collision:
-            current = new
-            new = []
-            for y, x in current:
-                new.append((y + 1, x))
-                if y + 1 > 19:
+            current = copy.copy(new)
+            new[0] += 1
+            for y, x, _ in self.location_to_sparse(new):
+                if y >= 20:
                     collision = True
-            for y, x in new:
-                if self.placed[y, x]:
+                    break
+                if self.placed[y, x] != 0:
                     collision = True
-        self.ghost = current
+                    break
+        self.ghost_location = current
+        self.ghost = [(y, x) for y, x, _ in self.location_to_sparse(current)]
 
 
 def interface(game):
