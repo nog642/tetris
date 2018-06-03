@@ -251,6 +251,8 @@ class Tetris(object):
 
     def location_to_sparse(self, location):
         sparse = []
+        if self.current_type is None:
+            return sparse
         for y, row in enumerate(PIECES[self.current_type][self.current_orientation]):
             for x, cell in enumerate(row):
                 if cell:
@@ -259,8 +261,6 @@ class Tetris(object):
 
     def compute_grid(self):
         grid = self.placed.copy()
-        if self.current_type is None:
-            return grid
         for y, x, cell in self.location_to_sparse(self.current_location):
             if cell:
                 if grid[y, x] != 0:
@@ -277,7 +277,6 @@ class Tetris(object):
         while True:
             start = time.time()
             while True:
-                time.sleep(.005)
                 if self.to_lock:
                     return
                 if time.time() - start > self.fall_wait:
@@ -328,7 +327,10 @@ class Tetris(object):
         self.next_piece = next(self.gen)
         self.display.draw_next(PIECES[self.next_piece]['N'])
         self.current_type = piece
-        self.current_location = [0, 0]
+        if piece == 'O':
+            self.current_location = [-2, 2]
+        else:
+            self.current_location = [-2, 3]
         self.current_orientation = 'N'
         self.update()
         threading.Thread(target=self.falling).start()
@@ -343,34 +345,34 @@ class Tetris(object):
         for y, x, color in changed:
             self.display.draw_cell((x, y), True, COLOR[color])
         self.saved = grid
-        self.calculate_ghost()
         for y, x in self.previous_ghost:
             if not grid[y, x]:
                 self.display.draw_cell((x, y), True, BG_COLOR)
         self.previous_ghost = []
-        for y, x in self.ghost:
-            if not grid[y, x]:
-                self.display.draw_cell((x, y), False, COLOR[KEY[self.current_type]])
-                self.previous_ghost.append((y, x))
+        if self.current_type is not None:
+            self.calculate_ghost()
+            for y, x in self.ghost:
+                if not grid[y, x]:
+                    self.display.draw_cell((x, y), False, COLOR[KEY[self.current_type]])
+                    self.previous_ghost.append((y, x))
+            if self.current_location == self.ghost_location:
+                threading.Thread(target=self.lock).start()
+            else:
+                self.to_lock = False
         self.display.update()
-        if self.current_location == self.ghost_location:
-            threading.Thread(target=self.lock).start()
-        else:
-            self.to_lock = False
 
     def lock(self):
         self.to_lock = True
         time.sleep(.5)
         if self.to_lock:
-            self.placed = self.saved
-            self.current = []
-            self.spawn()
-            # todo detect row completion
+            self.placed = self.saved.copy()
+            self.current_type = None
             for i, row in enumerate(self.placed):
                 if all(row):
                     print self.placed
-                    self.placed[1:i + 1] = self.placed[:1]
+                    self.placed[1:i + 1] = self.placed[:i]
                     self.update()
+            self.spawn()
 
     def calculate_ghost(self):
         current = copy.copy(self.current_location)
