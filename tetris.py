@@ -30,19 +30,112 @@ KEY = {
     'Z': 7
 }
 PIECES = {
-    'O': np.array([[0, 1, 1, 0],
-                   [0, 1, 1, 0]]),
-    'I': np.array([[2, 2, 2, 2]]),
-    'T': np.array([[0, 3, 0],
-                   [3, 3, 3]]),
-    'L': np.array([[0, 0, 4],
-                   [4, 4, 4]]),
-    'J': np.array([[5, 0, 0],
-                   [5, 5, 5]]),
-    'S': np.array([[0, 6, 6],
-                   [6, 6, 0]]),
-    'Z': np.array([[7, 7, 0],
-                   [0, 7, 7]]),
+    'O': {
+        'N': np.array([[0, 0, 1, 1],
+                       [0, 0, 1, 1],
+                       [0, 0, 0, 0],
+                       [0, 0, 0, 0]]),
+        'E': np.array([[0, 0, 1, 1],
+                       [0, 0, 1, 1],
+                       [0, 0, 0, 0],
+                       [0, 0, 0, 0]]),
+        'S': np.array([[0, 0, 1, 1],
+                       [0, 0, 1, 1],
+                       [0, 0, 0, 0],
+                       [0, 0, 0, 0]]),
+        'W': np.array([[0, 0, 1, 1],
+                       [0, 0, 1, 1],
+                       [0, 0, 0, 0],
+                       [0, 0, 0, 0]])
+    },
+    'I': {
+        'N': np.array([[0, 0, 0, 0],
+                       [2, 2, 2, 2],
+                       [0, 0, 0, 0],
+                       [0, 0, 0, 0]]),
+        'E': np.array([[0, 0, 2, 0],
+                       [0, 0, 2, 0],
+                       [0, 0, 2, 0],
+                       [0, 0, 2, 0]]),
+        'S': np.array([[0, 0, 0, 0],
+                       [0, 0, 0, 0],
+                       [2, 2, 2, 2],
+                       [0, 0, 0, 0]]),
+        'W': np.array([[0, 2, 0, 0],
+                       [0, 2, 0, 0],
+                       [0, 2, 0, 0],
+                       [0, 2, 0, 0]])
+    },
+    'T': {
+        'N': np.array([[0, 3, 0],
+                       [3, 3, 3],
+                       [0, 0, 0]]),
+        'E': np.array([[0, 3, 0],
+                       [0, 3, 3],
+                       [0, 3, 0]]),
+        'S': np.array([[0, 0, 0],
+                       [3, 3, 3],
+                       [0, 3, 0]]),
+        'W': np.array([[0, 3, 0],
+                       [3, 3, 0],
+                       [0, 3, 0]])
+    },
+    'L': {
+        'N': np.array([[0, 0, 4],
+                       [4, 4, 4],
+                       [0, 0, 0]]),
+        'E': np.array([[0, 4, 0],
+                       [0, 4, 0],
+                       [0, 4, 4]]),
+        'S': np.array([[0, 0, 0],
+                       [4, 4, 4],
+                       [4, 0, 0]]),
+        'W': np.array([[4, 4, 0],
+                       [0, 4, 0],
+                       [0, 4, 0]])
+    },
+    'J': {
+        'N': np.array([[5, 0, 0],
+                       [5, 5, 5],
+                       [0, 0, 0]]),
+        'E': np.array([[0, 5, 5],
+                       [0, 5, 0],
+                       [0, 5, 0]]),
+        'S': np.array([[0, 0, 0],
+                       [5, 5, 5],
+                       [0, 0, 5]]),
+        'W': np.array([[0, 5, 0],
+                       [0, 5, 0],
+                       [5, 5, 0]])
+    },
+    'S': {
+        'N': np.array([[0, 6, 6],
+                       [6, 6, 0],
+                       [0, 0, 0]]),
+        'E': np.array([[0, 6, 0],
+                       [0, 6, 6],
+                       [0, 0, 6]]),
+        'S': np.array([[0, 0, 0],
+                       [0, 6, 6],
+                       [6, 6, 0]]),
+        'W': np.array([[6, 0, 0],
+                       [6, 6, 0],
+                       [0, 6, 0]])
+    },
+    'Z': {
+        'N': np.array([[7, 7, 0],
+                       [0, 7, 7],
+                       [0, 0, 0]]),
+        'E': np.array([[0, 0, 7],
+                       [0, 7, 7],
+                       [0, 7, 0]]),
+        'S': np.array([[0, 0, 0],
+                       [7, 7, 0],
+                       [0, 7, 7]]),
+        'W': np.array([[0, 7, 0],
+                       [7, 7, 0],
+                       [7, 0, 0]])
+    },
 }
 WIDTH, HEIGHT = 1152, 648
 
@@ -80,7 +173,7 @@ class Display(object):
             400,
             (HEIGHT - (30 * 20 + 21 + 2)) // 2,
             180,
-            100
+            180
         )
         draw_rect_outline(
             self.screen,
@@ -150,6 +243,8 @@ class Tetris(object):
         self.ghost = []
         self.previous_ghost = []
         self.to_lock = False
+        self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
+        # self.current_box = None
 
     def compute_grid(self):
         grid = self.placed.copy()
@@ -160,10 +255,16 @@ class Tetris(object):
         return grid
 
     def falling(self):
-        while not self.to_lock:
-            time.sleep(1)
-            if not self.to_lock:
-                self.fall()
+        while True:
+            start = time.time()
+            while True:
+                time.sleep(.005)
+                if self.to_lock:
+                    return
+                if time.time() - start > self.fall_wait:
+                    break
+            self.fall()
+            print 'time between falls: {}'.format(time.time() - start)
 
     def fall(self):
         new = []
@@ -200,18 +301,23 @@ class Tetris(object):
         except Overlap:
             self.current = current
 
+    def rotate(self):
+        pass
+
     def spawn(self):
         piece = self.next_piece
         self.next_piece = next(self.gen)
-        self.display.draw_next(PIECES[self.next_piece])
+        self.display.draw_next(PIECES[self.next_piece]['N'])
         self.current_type = piece
         if self.current:
             raise Exception("'current' attribute must be empty before spawning")
-        piece_arr = PIECES[piece]
+        piece_arr = PIECES[piece]['N']
         for y, row in enumerate(piece_arr):
             for x, cell in enumerate(row):
                 if cell:
                     self.current.append((y - 2, x + 5 - piece_arr.shape[1] // 2))
+        # self.current_box = (-2, 5 - piece_arr.shape[1] // 2)
+        # self.display.draw_cell(self.current_box[::-1], True, TEXT_COLOR)
         self.update()
         threading.Thread(target=self.falling).start()
 
@@ -275,11 +381,20 @@ def interface(game):
     pygame.event.set_allowed([pygame.KEYDOWN, pygame.KEYUP])
     while not game.game_over:
         event = pygame.event.poll()
+        if event.type != pygame.NOEVENT:
+            print event
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_LEFT:
                 game.left()
-            if event.key == pygame.K_RIGHT:
+            elif event.key == pygame.K_RIGHT:
                 game.right()
+            elif event.key == pygame.K_DOWN:
+                game.fall_wait /= 20
+            elif event.key == pygame.K_UP:
+                pass
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_DOWN:
+                game.fall_wait = (.8 - ((game.level - 1) * .007))**(game.level - 1)
 
 
 def main():
