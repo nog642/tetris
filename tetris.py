@@ -473,7 +473,7 @@ class Tetris(object):
                     print 'row {} removed'.format(i)
                     self.placed[1:i + 1] = self.placed[:i]
                     self.update()
-            self.spawn()
+            threading.Thread(target=self.spawn).start()
 
     def calculate_ghost(self):
         current = copy.copy(self.current_location)
