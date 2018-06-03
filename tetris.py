@@ -10,8 +10,7 @@ import time
 pygame.init()
 
 
-BIG_FONT = pygame.font.SysFont("monospace", 200)
-SMALL_FONT = pygame.font.SysFont("monospace", 40)
+FONT = lambda size: pygame.font.SysFont("monospace", size)
 TEXT_COLOR = (204, 204, 204)
 BG_COLOR = (28, 28, 28)
 COLOR = {
@@ -237,17 +236,39 @@ class Display(object):
         else:
             draw_rect_outline(self.screen, BG_COLOR, color, rect)
 
+    def update_lines(self, n):
+        text = FONT(24).render("Lines: {}".format(n), 1, TEXT_COLOR)
+        text_rect = text.get_rect()
+        self.screen.fill(BG_COLOR, (
+            400 + 180 // 2 - text_rect[2] // 2,
+            (HEIGHT - (30 * 20 + 21 + 2)) // 2 + 200,
+            text_rect[2],
+            text_rect[3]
+        ))
+        self.screen.blit(text, (
+            400 + 180 // 2 - text_rect[2] // 2,
+            (HEIGHT - (30 * 20 + 21 + 2)) // 2 + 200
+        ))
+
+        # self.next_box = pygame.Rect(
+        #     400,
+        #     (HEIGHT - (30 * 20 + 21 + 2)) // 2,
+        #     180,
+        #     180
+        # )
+        pass
+
     def game_over(self):
         print 'GAME OVER'
-        gameover_text = BIG_FONT.render("GAME OVER", 1, (255, 0, 0))
+        gameover_text = FONT(200).render("GAME OVER", 1, (255, 0, 0))
         gameover_text_rect = gameover_text.get_rect()
         self.screen.blit(gameover_text, (
             WIDTH // 2 - gameover_text_rect[2] // 2,
             HEIGHT // 2 - gameover_text_rect[3] // 2
         ))
-        exit_text = SMALL_FONT.render("Exit", 1, (255, 0, 0))
+        exit_text = FONT(40).render("Exit", 1, (255, 0, 0))
         self.exit_text_rect = exit_text.get_rect()
-        restart_text = SMALL_FONT.render("Restart", 1, (255, 0, 0))
+        restart_text = FONT(40).render("Restart", 1, (255, 0, 0))
         self.restart_text_rect = restart_text.get_rect()
         draw_rect_outline(self.screen, BG_COLOR, (255, 0, 0), pygame.Rect(
             WIDTH // 2 - self.exit_text_rect[2] // 2 - 300,
@@ -298,6 +319,7 @@ class Tetris(object):
         self.previous_ghost = []
         self.to_lock = False
         self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
+        self.lines_cleared = 0
 
     def location_to_sparse(self, location):
         sparse = []
@@ -412,6 +434,7 @@ class Tetris(object):
                 threading.Thread(target=self.lock).start()
             else:
                 self.to_lock = False
+        self.display.update_lines(self.lines_cleared)
         self.display.update()
 
     def lock(self):
@@ -427,6 +450,7 @@ class Tetris(object):
             self.current_type = None
             for i, row in enumerate(self.placed):
                 if all(row):
+                    self.lines_cleared += 1
                     print 'row {} removed'.format(i)
                     self.placed[1:i + 1] = self.placed[:i]
                     self.update()
