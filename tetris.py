@@ -250,13 +250,19 @@ class Display(object):
             (HEIGHT - (30 * 20 + 21 + 2)) // 2 + 200
         ))
 
-        # self.next_box = pygame.Rect(
-        #     400,
-        #     (HEIGHT - (30 * 20 + 21 + 2)) // 2,
-        #     180,
-        #     180
-        # )
-        pass
+    def update_level(self, n):
+        text = FONT(24).render("Level: {}".format(n), 1, TEXT_COLOR)
+        text_rect = text.get_rect()
+        self.screen.fill(BG_COLOR, (
+            400 + 180 // 2 - text_rect[2] // 2,
+            (HEIGHT - (30 * 20 + 21 + 2)) // 2 + 240,
+            text_rect[2],
+            text_rect[3]
+        ))
+        self.screen.blit(text, (
+            400 + 180 // 2 - text_rect[2] // 2,
+            (HEIGHT - (30 * 20 + 21 + 2)) // 2 + 240
+        ))
 
     def game_over(self):
         print 'GAME OVER'
@@ -320,6 +326,8 @@ class Tetris(object):
         self.to_lock = False
         self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
         self.lines_cleared = 0
+        self.line_goal = 5
+        self.currently_falling = False
 
     def location_to_sparse(self, location):
         sparse = []
@@ -345,10 +353,12 @@ class Tetris(object):
         return grid
 
     def falling(self):
+        self.currently_falling = True
         while True:
             start = time.time()
             while True:
                 if self.to_lock:
+                    self.currently_falling = False
                     return
                     # todo there is currently no mechanism to restart the falling thread if it ends up not locking
                 if time.time() - start > self.fall_wait:
@@ -435,6 +445,7 @@ class Tetris(object):
             else:
                 self.to_lock = False
         self.display.update_lines(self.lines_cleared)
+        self.display.update_level(self.level)
         self.display.update()
 
     def lock(self):
@@ -451,6 +462,11 @@ class Tetris(object):
             for i, row in enumerate(self.placed):
                 if all(row):
                     self.lines_cleared += 1
+                    if self.lines_cleared == self.line_goal:
+                        self.level += 1
+                        self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
+                        self.line_goal += self.line_goal + 5
+                        # todo update level
                     print 'row {} removed'.format(i)
                     self.placed[1:i + 1] = self.placed[:i]
                     self.update()
