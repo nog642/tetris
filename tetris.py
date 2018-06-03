@@ -328,6 +328,7 @@ class Tetris(object):
         self.lines_cleared = 0
         self.line_goal = 5
         self.currently_falling = False
+        self.last_fall = 0
 
     def location_to_sparse(self, location):
         sparse = []
@@ -353,21 +354,20 @@ class Tetris(object):
         return grid
 
     def falling(self):
-        self.currently_falling = True
         while True:
             start = time.time()
             while True:
                 if self.to_lock:
                     self.currently_falling = False
                     return
-                    # todo there is currently no mechanism to restart the falling thread if it ends up not locking
                 if time.time() - start > self.fall_wait:
                     break
             try:
                 self.fall()
+                print 'time between falls: {}'.format(time.time() - self.last_fall)
+                self.last_fall = time.time()
             except Overlap:
                 print 'failed to fall, caught overlap'
-            print 'time between falls: {}'.format(time.time() - start)
 
     def fall(self):
         self.current_location[0] += 1
@@ -417,8 +417,9 @@ class Tetris(object):
         else:
             self.current_location = [-2, 3]
         self.current_orientation = 'N'
-        self.update()
+        self.currently_falling = True
         threading.Thread(target=self.falling).start()
+        self.update()
 
     def update(self):
         grid = self.compute_grid()
@@ -444,6 +445,9 @@ class Tetris(object):
                 threading.Thread(target=self.lock).start()
             else:
                 self.to_lock = False
+                if not self.currently_falling:
+                    self.currently_falling = True
+                    threading.Thread(target=self.falling).start()
         self.display.update_lines(self.lines_cleared)
         self.display.update_level(self.level)
         self.display.update()
@@ -465,8 +469,7 @@ class Tetris(object):
                     if self.lines_cleared == self.line_goal:
                         self.level += 1
                         self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
-                        self.line_goal += self.line_goal + 5
-                        # todo update level
+                        self.line_goal += self.level * 5
                     print 'row {} removed'.format(i)
                     self.placed[1:i + 1] = self.placed[:i]
                     self.update()
