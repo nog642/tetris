@@ -4,11 +4,14 @@ import numpy as np
 import profile
 import pygame
 import random
+import sys
 import threading
 import time
 pygame.init()
 
 
+BIG_FONT = pygame.font.SysFont("monospace", 200)
+SMALL_FONT = pygame.font.SysFont("monospace", 40)
 TEXT_COLOR = (204, 204, 204)
 BG_COLOR = (28, 28, 28)
 COLOR = {
@@ -150,6 +153,12 @@ def tetrimino_gen():
             yield tetrimino
 
 
+def in_rect(point, rect):
+    left, top, width, height = rect
+    x, y = point
+    return left < x < left + width and top < y < top + height
+
+
 class Overlap(Exception):
     pass
 
@@ -164,7 +173,7 @@ class Display(object):
     def __init__(self, screen):
 
         self.screen = screen
-        self.screen.fill((28, 28, 28))
+        self.screen.fill(BG_COLOR)
         self.grid = pygame.Rect(
             600,
             (HEIGHT - (30 * 20 + 21 + 2)) // 2,
@@ -190,6 +199,9 @@ class Display(object):
             self.next_box
         )
         self.update()
+
+        self.exit_text_rect = None
+        self.restart_text_rect = None
 
     def draw_next(self, grid):
         h, w = grid.shape
@@ -225,6 +237,44 @@ class Display(object):
         else:
             draw_rect_outline(self.screen, BG_COLOR, color, rect)
 
+    def game_over(self):
+        print 'GAME OVER'
+        gameover_text = BIG_FONT.render("GAME OVER", 1, (255, 0, 0))
+        gameover_text_rect = gameover_text.get_rect()
+        self.screen.blit(gameover_text, (
+            WIDTH // 2 - gameover_text_rect[2] // 2,
+            HEIGHT // 2 - gameover_text_rect[3] // 2
+        ))
+        exit_text = SMALL_FONT.render("Exit", 1, (255, 0, 0))
+        self.exit_text_rect = exit_text.get_rect()
+        restart_text = SMALL_FONT.render("Restart", 1, (255, 0, 0))
+        self.restart_text_rect = restart_text.get_rect()
+        draw_rect_outline(self.screen, BG_COLOR, (255, 0, 0), pygame.Rect(
+            WIDTH // 2 - self.exit_text_rect[2] // 2 - 300,
+            HEIGHT // 2 - self.exit_text_rect[3] // 2 + 200,
+            self.exit_text_rect[2],
+            self.exit_text_rect[3]
+        ))
+        draw_rect_outline(self.screen, BG_COLOR, (255, 0, 0), pygame.Rect(
+            WIDTH // 2 - self.restart_text_rect[2] // 2 + 300,
+            HEIGHT // 2 - self.restart_text_rect[3] // 2 + 200,
+            self.restart_text_rect[2],
+            self.restart_text_rect[3]
+        ))
+        self.screen.blit(exit_text, (
+            WIDTH // 2 - self.exit_text_rect[2] // 2 - 300,
+            HEIGHT // 2 - self.exit_text_rect[3] // 2 + 200
+        ))
+        self.screen.blit(restart_text, (
+            WIDTH // 2 - self.restart_text_rect[2] // 2 + 300,
+            HEIGHT // 2 - self.restart_text_rect[3] // 2 + 200
+        ))
+        self.update()
+
+    def restart(self):
+        self.__init__(self.screen)
+        start_game(self)
+
     @staticmethod
     def update():
         pygame.display.update()
@@ -242,9 +292,9 @@ class Tetris(object):
         self.gen = tetrimino_gen()
         self.next_piece = next(self.gen)
         self.saved = self.compute_grid()
-        self.game_over = False
         self.ghost = []
         self.ghost_location = None
+        self.game_over = False
         self.previous_ghost = []
         self.to_lock = False
         self.fall_wait = (.8 - ((self.level - 1) * .007))**(self.level - 1)
@@ -263,12 +313,11 @@ class Tetris(object):
         grid = self.placed.copy()
         for y, x, cell in self.location_to_sparse(self.current_location):
             if cell:
-                if grid[y, x] != 0:
-                    raise Overlap
                 if y >= 20:
                     raise Overlap
-                    print 'OVERLAP RAISED'
                 if not 0 <= x <= 9:
+                    raise Overlap
+                if grid[y, x] != 0:
                     raise Overlap
                 grid[y, x] = cell
         return grid
@@ -279,9 +328,13 @@ class Tetris(object):
             while True:
                 if self.to_lock:
                     return
+                    # todo there is currently no mechanism to restart the falling thread if it ends up not locking
                 if time.time() - start > self.fall_wait:
                     break
-            self.fall()
+            try:
+                self.fall()
+            except Overlap:
+                print 'failed to fall, caught overlap'
             print 'time between falls: {}'.format(time.time() - start)
 
     def fall(self):
@@ -366,10 +419,15 @@ class Tetris(object):
         time.sleep(.5)
         if self.to_lock:
             self.placed = self.saved.copy()
+            for y, _, _ in self.location_to_sparse(self.current_location):
+                if y < 0:
+                    self.game_over = True
+                    self.display.game_over()
+                    return
             self.current_type = None
             for i, row in enumerate(self.placed):
                 if all(row):
-                    print self.placed
+                    print 'row {} removed'.format(i)
                     self.placed[1:i + 1] = self.placed[:i]
                     self.update()
             self.spawn()
@@ -410,14 +468,60 @@ def interface(game):
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_DOWN:
                 game.fall_wait = (.8 - ((game.level - 1) * .007))**(game.level - 1)
+    else:
+        exit_down = False
+        restart_down = False
+        while game.game_over:
+            event = pygame.event.poll()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                print event
+                if in_rect(event.pos, (
+                    WIDTH // 2 - game.display.exit_text_rect[2] // 2 - 300,
+                    HEIGHT // 2 - game.display.exit_text_rect[3] // 2 + 200,
+                    game.display.exit_text_rect[2],
+                    game.display.exit_text_rect[3]
+                )):
+                    exit_down = True
+                elif in_rect(event.pos, (
+                    WIDTH // 2 - game.display.restart_text_rect[2] // 2 + 300,
+                    HEIGHT // 2 - game.display.restart_text_rect[3] // 2 + 200,
+                    game.display.restart_text_rect[2],
+                    game.display.restart_text_rect[3]
+                )):
+                    restart_down = True
+            elif event.type == pygame.MOUSEBUTTONUP:
+                print event
+                if exit_down:
+                    exit_down = False
+                    if in_rect(event.pos, (
+                        WIDTH // 2 - game.display.exit_text_rect[2] // 2 - 300,
+                        HEIGHT // 2 - game.display.exit_text_rect[3] // 2 + 200,
+                        game.display.exit_text_rect[2],
+                        game.display.exit_text_rect[3]
+                    )):
+                        sys.exit(0)
+                elif restart_down:
+                    restart_down = False
+                    if in_rect(event.pos, (
+                        WIDTH // 2 - game.display.restart_text_rect[2] // 2 + 300,
+                        HEIGHT // 2 - game.display.restart_text_rect[3] // 2 + 200,
+                        game.display.restart_text_rect[2],
+                        game.display.restart_text_rect[3]
+                    )):
+                        game.display.restart()
+                        return
+
+
+def start_game(display):
+    game = Tetris(display)
+    threading.Thread(target=interface, args=(game,)).start()
+    game.spawn()
 
 
 def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     display = Display(screen)
-    game = Tetris(display)
-    threading.Thread(target=interface, args=(game,)).start()
-    game.spawn()
+    start_game(display)
 
 
 if __name__ == '__main__':
