@@ -139,6 +139,7 @@ PIECES = {
     },
 }
 WIDTH, HEIGHT = 1152, 648
+ROTATION_ORDER = ['N', 'E', 'S', 'W']
 
 
 def tetrimino_gen():
@@ -315,7 +316,12 @@ class Tetris(object):
             self.current_location = current
 
     def rotate(self):
-        pass
+        prev_orientation = self.current_orientation
+        self.current_orientation = ROTATION_ORDER[(ROTATION_ORDER.index(self.current_orientation) + 1) % 4]
+        try:
+            self.update()
+        except Overlap:
+            self.current_orientation = prev_orientation
 
     def spawn(self):
         piece = self.next_piece
@@ -398,7 +404,7 @@ def interface(game):
             elif event.key == pygame.K_DOWN:
                 game.fall_wait /= 20
             elif event.key == pygame.K_UP:
-                pass
+                game.rotate()
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_DOWN:
                 game.fall_wait = (.8 - ((game.level - 1) * .007))**(game.level - 1)
